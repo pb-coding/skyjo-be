@@ -8,7 +8,25 @@ export type ObfuscatedPlayer = {
   knownCardPositions: boolean[];
   playersTurn: boolean;
   cardCache: Card | null;
+  tookDispiledCard: boolean;
+  roundPoints: number;
+  totalPoints: number;
+  closedRound: boolean;
 };
+
+type ColumnPosition = [number, number, number];
+
+type ThreeOfAKind = {
+  position: ColumnPosition;
+  value: number;
+};
+
+const COLUMN_POSITIONS: ColumnPosition[] = [
+  [0, 4, 8],
+  [1, 5, 9],
+  [2, 6, 10],
+  [3, 7, 11],
+];
 
 export class Player {
   id: number;
@@ -18,6 +36,10 @@ export class Player {
   knownCardPositions: boolean[];
   playersTurn: boolean;
   cardCache: Card | null; // this is where the card is temporarily stored when a player draws a card
+  tookDispiledCard: boolean; // this is used to check if a player took a dispiled card in the current turn
+  roundPoints: number;
+  totalPoints: number;
+  closedRound: boolean;
   constructor(id: number, socketId: string, name: string, cards: Card[]) {
     this.id = id;
     this.socketId = socketId;
@@ -26,6 +48,10 @@ export class Player {
     this.knownCardPositions = new Array(12).fill(false);
     this.playersTurn = true;
     this.cardCache = null;
+    this.tookDispiledCard = false;
+    this.roundPoints = 0;
+    this.totalPoints = 0;
+    this.closedRound = false;
   }
 
   hasInitialCardsRevealed(): boolean {
@@ -38,6 +64,28 @@ export class Player {
 
   getRevealedCardCount(): number {
     return this.knownCardPositions.filter((position) => position).length;
+  }
+
+  getThreeOfAKinds(): ThreeOfAKind[] {
+    const revealedCardPositions = this.getRevealedCardPositions();
+    const columns: ColumnPosition[] = COLUMN_POSITIONS;
+    const threeOfAKinds: ThreeOfAKind[] = [];
+    columns.forEach((column) => {
+      const columnValues = column.map((position) => this.cards[position].value);
+      const columnHasSameValues = columnValues.every(
+        (value) => value === columnValues[0]
+      );
+      const columnIsRevealed = column.every((position) =>
+        revealedCardPositions.includes(position)
+      );
+      if (columnHasSameValues && columnIsRevealed) {
+        threeOfAKinds.push({
+          position: column,
+          value: columnValues[0],
+        });
+      }
+    });
+    return threeOfAKinds;
   }
 
   getRevealedCardPositions(): number[] {
