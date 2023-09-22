@@ -101,7 +101,7 @@ export class Game {
     this.players.forEach((player) => {
       player.cards = this.cardStack.cards.splice(0, 12);
       player.knownCardPositions = new Array(12).fill(false);
-      player.playersTurn = false;
+      player.playersTurn = true;
       player.cardCache = null;
       player.tookDispiledCard = false;
       player.roundPoints = 0;
@@ -330,12 +330,13 @@ export class Game {
         if (playerSocket) {
           expectedActions.forEach((expectedAction) => {
             const [actionName, processAction] = expectedAction;
-            const eventListener = (data: ActionDataType) => {
+            const eventListener = (data: ActionDataType, ackFunction: any) => {
               console.log(`Received ${actionName} from ${playerSocketId}`);
               processAction(playerSocketId, data);
               // remove current and event listeners of alternative expected actions
               removePlayerActionListeners();
               const playerResponse = { playerSocketId, data };
+              // ackFunction("success");
               resolve(playerResponse);
             };
             playerSocket.on(actionName, eventListener);
@@ -383,16 +384,7 @@ export class Game {
       discardPile: this.discardPile,
       players: this.players.map(({ cards, ...player }) => {
         return {
-          id: player.id,
-          socketId: player.socketId,
-          name: player.name,
-          playersTurn: player.playersTurn,
-          cardCache: player.cardCache,
-          tookDispiledCard: player.tookDispiledCard,
-          knownCardPositions: player.knownCardPositions,
-          roundPoints: player.roundPoints,
-          totalPoints: player.totalPoints,
-          closedRound: player.closedRound,
+          ...player,
           cards: cards.map((card: Card, index: number) => {
             // unknown cards are obfuscated to 0
             return {
@@ -483,7 +475,7 @@ export class Game {
     const alreadyClosedPlayers = this.players.filter(
       (player) => player.closedRound
     );
-    if (alreadyClosedPlayers) return;
+    if (alreadyClosedPlayers.length > 1) return;
 
     const playerWithAllCardsRevealed = this.players.find((player) =>
       player.knownCardPositions.every(
