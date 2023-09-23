@@ -24,7 +24,7 @@ export const handleNewGame = (
     const game = new Game(socket, sessionId, players);
     game.sendObfuscatedGameUpdate();
   } else {
-    // error handling
+    // TODO: error handling & send message to client
     console.log("Not enough players to start a game");
   }
 };
