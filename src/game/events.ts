@@ -19,6 +19,9 @@ export const handleNewGame = (
   const { sessionId } = gameDetails;
 
   const players = io.sockets.adapter.rooms.get(sessionId);
+  // get players based on socket
+  const playersInSession = io.sockets.adapter.sids.get(socket.id);
+  console.log("Players in session:", playersInSession?.size);
 
   if (players && players.size > 1) {
     const game = new Game(socket, sessionId, players);

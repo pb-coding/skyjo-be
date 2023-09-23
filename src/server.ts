@@ -13,11 +13,15 @@ import corsOptions from "./config/corsOptions";
 import cookieParser from "cookie-parser";
 import rootRouter from "./routes/root";
 import { handleJoinSession, handleNewGame } from "./game/events";
+import dotenv from "dotenv";
 
+dotenv.config();
+
+const FRONTEND_URL = process.env.FRONTEND_URL ?? "";
 const httpServer = new Server(app);
 export const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: "https://skyjo.voltvector.org",
+    origin: FRONTEND_URL,
     methods: ["GET", "POST"],
   },
 });
@@ -36,6 +40,7 @@ io.on("connection", (socket: Socket) => {
   socket.on("disconnect", () => {
     console.log("A user disconnected:", socket.id);
     // TODO: remove players from session and delete game object
+    io;
   });
 });
 
