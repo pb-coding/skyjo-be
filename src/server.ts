@@ -17,7 +17,7 @@ import { handleJoinSession, handleNewGame } from "./game/events";
 const httpServer = new Server(app);
 export const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: "https://skyjo.voltvector.org",
     methods: ["GET", "POST"],
   },
 });
