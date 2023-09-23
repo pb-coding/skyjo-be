@@ -386,7 +386,7 @@ export class Game {
         return {
           ...player,
           cards: cards.map((card: Card, index: number) => {
-            // unknown cards are obfuscated to 0
+            // unknown cards are obfuscated to X
             return {
               id: player.knownCardPositions[index] ? card.id : 0,
               value: player.knownCardPositions[index] ? card.value : "X",
