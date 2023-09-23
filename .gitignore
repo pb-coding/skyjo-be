@@ -4,4 +4,4 @@ dist
 
 src/logs/
 
-.env.local
+.env
