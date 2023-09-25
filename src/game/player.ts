@@ -40,6 +40,7 @@ export class Player {
   roundPoints: number;
   totalPoints: number;
   closedRound: boolean;
+  place: number | null; // indicates the place the player got in the last round
   constructor(id: number, socketId: string, name: string, cards: Card[]) {
     this.id = id;
     this.socketId = socketId;
@@ -52,6 +53,7 @@ export class Player {
     this.roundPoints = 0;
     this.totalPoints = 0;
     this.closedRound = false;
+    this.place = null;
   }
 
   hasInitialCardsRevealed(): boolean {

@@ -3,7 +3,6 @@ import { CardStack } from "./card";
 import { Card, ObfuscatedCardStack } from "./card";
 import { Socket } from "socket.io";
 import { io } from "../server";
-import { all } from "axios";
 
 type PlayerSocketSet = Set<string>;
 
@@ -107,6 +106,7 @@ export class Game {
       player.roundPoints = 0;
       player.totalPoints = startOver ? 0 : player.totalPoints;
       player.closedRound = false;
+      player.place = null;
     });
     this.discardPile = [this.cardStack.cards.pop()!];
     this.phase = gamePhase.revealTwoCards;
@@ -140,6 +140,7 @@ export class Game {
           break;
         case gamePhase.newRound:
           console.log("\nGame phase: newRound");
+          this.checkIfPointLimitReached();
           await this.nextRound();
           break;
         default:
@@ -179,9 +180,7 @@ export class Game {
       this.sendObfuscatedGameUpdate();
       return;
     }
-    this.sendMessageToAllPlayers(
-      `Waiting for ${playerOnTurn.name} to pick up card`
-    );
+    console.log(`Waiting for ${playerOnTurn.name} to pick up card`);
     await this.waitForPlayerActions(
       [
         ["draw-from-card-stack", this.drawCardAction.bind(this)],
@@ -195,9 +194,7 @@ export class Game {
 
   async placeCard() {
     const playerOnTurn = this.getPlayersTurn();
-    this.sendMessageToAllPlayers(
-      `Waiting for ${playerOnTurn.name} to place card`
-    );
+    console.log(`Waiting for ${playerOnTurn.name} to place card`);
 
     const expectedActions: ExpectedPlayerActions = [
       ["click-card", this.placeCardAction.bind(this)],
@@ -215,9 +212,7 @@ export class Game {
 
   async revealCard() {
     const playerOnTurn = this.getPlayersTurn();
-    this.sendMessageToAllPlayers(
-      `Waiting for ${playerOnTurn.name} to reveal a card`
-    );
+    console.log(`Waiting for ${playerOnTurn.name} to reveal a card`);
 
     const numberOfRevealedCards = playerOnTurn.getRevealedCardCount();
     // ensures that the player does not select an already revealed card
@@ -237,7 +232,7 @@ export class Game {
     this.evaluateAndSavePoints();
     this.phase = gamePhase.newRound;
     this.sendObfuscatedGameUpdate();
-    this.sendMessageToAllPlayers("Waiting for next round");
+    console.log("Waiting for next round");
   }
 
   async nextRound() {
@@ -448,6 +443,7 @@ export class Game {
   evaluateAndSavePoints() {
     const playersWithLowestPoints = this.getPlayersWithLowestPoints();
     const playerClosedRound = this.getPlayerThatClosedRound();
+    let playerClosedRoundLostMessage = "";
     if (
       playersWithLowestPoints.includes(playerClosedRound) &&
       playersWithLowestPoints.length === 1
@@ -458,12 +454,12 @@ export class Game {
       });
       return;
     } else if (playersWithLowestPoints.length === 1) {
-      this.sendMessageToAllPlayers(
+      playerClosedRoundLostMessage = playerClosedRoundLostMessage.concat(
         `${playersWithLowestPoints[0].name} won the round!`
       );
     } else if (playersWithLowestPoints.length > 1) {
-      this.sendMessageToAllPlayers(
-        `${playersWithLowestPoints
+      playerClosedRoundLostMessage = playerClosedRoundLostMessage.concat(
+        `\n ${playersWithLowestPoints
           .map((player) => player.name)
           .join(", ")} scored equally the lowest points!`
       );
@@ -472,9 +468,10 @@ export class Game {
       if (player.closedRound) player.totalPoints += player.roundPoints * 2;
       else player.totalPoints += player.roundPoints;
     });
-    this.sendMessageToAllPlayers(
-      `${playerClosedRound.name} points are doubled!`
+    playerClosedRoundLostMessage = playerClosedRoundLostMessage.concat(
+      `\n ${playerClosedRound.name} points are doubled!`
     );
+    this.sendMessageToAllPlayers(playerClosedRoundLostMessage);
   }
 
   checkForFullRevealedCards() {
@@ -490,6 +487,43 @@ export class Game {
     );
     if (playerWithAllCardsRevealed) {
       playerWithAllCardsRevealed.closedRound = true;
+    }
+  }
+
+  checkIfPointLimitReached() {
+    const highestPoints = Math.max(
+      ...this.players.map((player) => player.totalPoints)
+    );
+
+    const lowestPoints = Math.min(
+      ...this.players.map((player) => player.totalPoints)
+    );
+    const playersWithHighestPoints = this.players.filter(
+      (player) => player.totalPoints === highestPoints
+    );
+
+    if (highestPoints >= 100) {
+      if (playersWithHighestPoints.length === 1) {
+        const playerWithHighestPoints = playersWithHighestPoints[0];
+        this.sendMessageToAllPlayers(
+          `${playerWithHighestPoints.name} lost with ${playerWithHighestPoints.totalPoints}!`
+        );
+      } else {
+        const playerNames = playersWithHighestPoints
+          .map((player) => player.name)
+          .join(", ");
+        this.sendMessageToAllPlayers(
+          `Multiple players: ${playerNames} lost with ${highestPoints} points!`
+        );
+      }
+      const playersWithLowestPoints = this.players.filter(
+        (player) => player.totalPoints === lowestPoints
+      );
+      playersWithLowestPoints.forEach((player) => (player.place = 1));
+
+      this.phase = gamePhase.gameEnded;
+      this.sendObfuscatedGameUpdate();
+      allGames.splice(allGames.indexOf(this), 1);
     }
   }
 
