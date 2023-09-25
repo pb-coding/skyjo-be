@@ -478,7 +478,7 @@ export class Game {
     const alreadyClosedPlayers = this.players.filter(
       (player) => player.closedRound
     );
-    if (alreadyClosedPlayers.length > 1) return;
+    if (alreadyClosedPlayers.length > 0) return; // TODO: check if this is correct with more than 2 players
 
     const playerWithAllCardsRevealed = this.players.find((player) =>
       player.knownCardPositions.every(
