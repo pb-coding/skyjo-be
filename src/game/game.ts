@@ -3,6 +3,7 @@ import { CardStack } from "./card";
 import { Card, ObfuscatedCardStack } from "./card";
 import { Socket } from "socket.io";
 import { io } from "../server";
+import { all } from "axios";
 
 type PlayerSocketSet = Set<string>;
 
@@ -30,6 +31,8 @@ export type ObfuscatedGame = {
   phase: string;
   round: number;
 };
+
+export const allGames: Game[] = [];
 
 const gamePhase = {
   newRound: "new round",
@@ -65,9 +68,6 @@ export class Game {
     this.discardPile = [this.cardStack.cards.pop()!];
     this.phase = gamePhase.revealTwoCards;
     this.round = 1;
-
-    console.log(`New Game created with ${this.playerCount} players!`);
-    this.gameLoop();
   }
 
   initializePlayers(
@@ -114,6 +114,7 @@ export class Game {
 
   async gameLoop() {
     console.log("Game started!");
+    this.sendObfuscatedGameUpdate();
     while (this.phase !== gamePhase.gameEnded) {
       this.checkForFullRevealedCards();
       switch (this.phase) {
@@ -142,7 +143,8 @@ export class Game {
           await this.nextRound();
           break;
         default:
-          throw new Error(`Invalid game phase: ${this.phase}`);
+          console.log("\nGame Ended.");
+          break;
       }
     }
   }
@@ -415,6 +417,10 @@ export class Game {
     io.to(this.sessionId).emit("game-update", obfuscatedGame);
   }
 
+  sendNullGameUpdate() {
+    io.to(this.sessionId).emit("game-update", null);
+  }
+
   updatePlayerRoundPoints() {
     this.players.forEach((player) => {
       const revealedCardValuesSum = player.getRevealedCardsValueSum();
@@ -484,6 +490,30 @@ export class Game {
     );
     if (playerWithAllCardsRevealed) {
       playerWithAllCardsRevealed.closedRound = true;
+    }
+  }
+
+  checkForPlayerLeave() {
+    const playersInSession = io.sockets.adapter.rooms.get(this.sessionId);
+    if (playersInSession?.size ?? 0 < this.playerCount) {
+      const playerThatLeftSession = this.players.filter(
+        (player) => !playersInSession?.has(player.socketId)
+      );
+      console.log("players that left session", playerThatLeftSession);
+      if (playerThatLeftSession.length > 0) {
+        this.sendMessageToAllPlayers(
+          `${playerThatLeftSession.map(
+            (player) => player.name + " "
+          )} left the session!`
+        );
+        this.phase = gamePhase.gameEnded;
+        this.sendNullGameUpdate();
+        io.to(this.sessionId).emit(
+          "clients-in-session",
+          playersInSession?.size ?? 0
+        );
+        allGames.splice(allGames.indexOf(this), 1);
+      }
     }
   }
 

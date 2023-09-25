@@ -12,7 +12,12 @@ import cors from "cors";
 import corsOptions from "./config/corsOptions";
 import cookieParser from "cookie-parser";
 import rootRouter from "./routes/root";
-import { handleJoinSession, handleNewGame } from "./game/events";
+import {
+  handleJoinSession,
+  handleLeaveSession,
+  handleNewGame,
+  handleDisconnect,
+} from "./game/events";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -33,14 +38,18 @@ io.on("connection", (socket: Socket) => {
     handleJoinSession(socket, sessionId)
   );
 
+  socket.on("leave-session", (sessionId: string) => {
+    // TODO: check if user is in that session before leaving
+    handleLeaveSession(socket, sessionId);
+  });
+
   socket.on("new-game", (gameDetails: { sessionId: string }) =>
+    // TODO: get sessionId from socket instead of passing it from client
     handleNewGame(socket, gameDetails)
   );
 
   socket.on("disconnect", () => {
-    console.log("A user disconnected:", socket.id);
-    // TODO: remove players from session and delete game object
-    io;
+    handleDisconnect(socket);
   });
 });
 
