@@ -34,8 +34,8 @@ export const io = new SocketIOServer(httpServer, {
 io.on("connection", (socket: Socket) => {
   console.log("A user connected:", socket.id);
 
-  socket.on("join-session", (sessionId: string) =>
-    handleJoinSession(socket, sessionId)
+  socket.on("join-session", (sessionId: string, callback) =>
+    handleJoinSession(socket, sessionId, callback)
   );
 
   socket.on("leave-session", (sessionId: string) => {

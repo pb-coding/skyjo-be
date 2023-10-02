@@ -1,6 +1,6 @@
-import { Player, ObfuscatedPlayer } from "./player";
-import { CardStack } from "./card";
-import { Card, ObfuscatedCardStack } from "./card";
+import { Player, ObfuscatedPlayer, ConcealableColumn } from "./player";
+import { CardStack, ConcealableCard } from "./card";
+import { Card, ConcealableCardStack } from "./card";
 import { Socket } from "socket.io";
 import { io } from "../server";
 
@@ -18,14 +18,14 @@ type PlayerAction<ActionDataType> = {
   data: ActionDataType;
 };
 
-type CardPosition = number;
+type CardPosition = [number, number];
 
 // obfuscated types are used to send only necessary data to the client
 export type ObfuscatedGame = {
   sessionId: string;
   playerCount: number;
   players: ObfuscatedPlayer[];
-  cardStack: ObfuscatedCardStack;
+  cardStack: ConcealableCardStack;
   discardPile: Card[];
   phase: string;
   round: number;
@@ -78,13 +78,8 @@ export class Game {
     let index = 0;
     playerIds.forEach((socketId) => {
       index++;
-      const playerCards = cardStack.cards.splice(0, 12);
-      const player = new Player(
-        index,
-        socketId,
-        `Player ${index}`,
-        playerCards
-      );
+
+      const player = new Player(index, socketId, `Player ${index}`, cardStack);
       players.push(player);
     });
 
@@ -98,8 +93,8 @@ export class Game {
     this.cardStack = new CardStack();
     this.cardStack.shuffleCards();
     this.players.forEach((player) => {
-      player.cards = this.cardStack.cards.splice(0, 12);
-      player.knownCardPositions = new Array(12).fill(false);
+      player.deck = player.generateDeck(this.cardStack);
+      player.knownCardPositions = player.createUnknownCardPositions();
       player.playersTurn = true;
       player.cardCache = null;
       player.tookDispiledCard = false;
@@ -117,6 +112,7 @@ export class Game {
     this.sendObfuscatedGameUpdate();
     while (this.phase !== gamePhase.gameEnded) {
       this.checkForFullRevealedCards();
+      this.removeThreeOfAKinds();
       switch (this.phase) {
         case gamePhase.revealTwoCards:
           console.log("\nGame phase: revealTwoCards");
@@ -245,12 +241,15 @@ export class Game {
 
   // Player Action Callbacks
 
-  revealCardAction(playerSocketId: string, cardPosition: number) {
+  revealCardAction(playerSocketId: string, cardPosition: CardPosition) {
     const player = this.getPlayerBySocketId(playerSocketId);
-    const revealedCard = player.cards[cardPosition];
-    console.log(`Revealed card ${revealedCard} at position ${cardPosition}`);
+    const [columnIndex, cardIndex] = cardPosition;
+    const revealedCard = player.deck[columnIndex][cardIndex];
+    console.log(
+      `Revealed card ${revealedCard} at column ${columnIndex} card ${cardIndex}`
+    );
     const playerIndex = this.players.indexOf(player!);
-    this.players[playerIndex].knownCardPositions[cardPosition] = true;
+    this.players[playerIndex].knownCardPositions[columnIndex][cardIndex] = true;
     this.sendObfuscatedGameUpdate();
   }
 
@@ -281,15 +280,17 @@ export class Game {
     this.sendObfuscatedGameUpdate();
   }
 
-  placeCardAction(playerSocketId: string, cardPosition: number) {
+  placeCardAction(playerSocketId: string, cardPosition: CardPosition) {
     const player = this.getPlayerBySocketId(playerSocketId);
     console.log(`Player ${player.name} placed a card.`);
     const placedCard = player.cardCache!;
     player.cardCache = null;
-    const replacedCard = player.cards[cardPosition];
+    const [columnIndex, cardIndex] = cardPosition;
+    const replacedCard = player.deck[columnIndex][cardIndex];
     this.discardPile.push(replacedCard);
-    player.cards[cardPosition] = placedCard;
-    player.knownCardPositions[cardPosition] = true;
+    player.deck[columnIndex][cardIndex] = placedCard;
+    player.knownCardPositions[columnIndex][cardIndex] = true;
+    // TODO: check for three of a kind
     this.nextPlayersTurn();
     this.phase = gamePhase.pickUpCard;
     this.sendObfuscatedGameUpdate();
@@ -379,32 +380,24 @@ export class Game {
       phase: this.phase,
       round: this.round,
       discardPile: this.discardPile,
-      players: this.players.map(({ cards, ...player }) => {
+      players: this.players.map(({ deck, ...player }) => {
         return {
           ...player,
-          cards: cards.map((card: Card, index: number) => {
-            // unknown cards are obfuscated to X
-            return {
-              id: player.knownCardPositions[index] ? card.id : 0,
-              value: player.knownCardPositions[index] ? card.value : "X",
-              name: player.knownCardPositions[index]
-                ? card.name
-                : "Facedown Card",
-              color: player.knownCardPositions[index] ? card.color : "black",
-              matchColorToCardValue: card.matchColorToCardValue,
-            };
+          deck: deck.map((column, columnIndex) => {
+            const concealableColumn = column.map((card, cardIndex) => {
+              // unknown cards are obfuscated to null
+              return player.knownCardPositions[columnIndex][cardIndex]
+                ? card
+                : (null as ConcealableCard);
+            });
+            return concealableColumn as ConcealableColumn;
           }),
-        };
+        } satisfies ObfuscatedPlayer;
       }),
       cardStack: {
         cards: this.cardStack.cards.map((card: Card) => {
           // player may not see the value of the facedown cards in the cardStack
-          return {
-            id: 0,
-            value: "X",
-            name: "Facedown Card",
-            color: "black",
-          };
+          return null;
         }),
       },
     };
@@ -419,13 +412,7 @@ export class Game {
   updatePlayerRoundPoints() {
     this.players.forEach((player) => {
       const revealedCardValuesSum = player.getRevealedCardsValueSum();
-      const threeOfAKinds = player.getThreeOfAKinds();
-      const threeOfAKindPoints = threeOfAKinds.reduce(
-        (points, threeOfAKind) => points + threeOfAKind.value * 3,
-        0
-      );
-
-      player.roundPoints = revealedCardValuesSum - threeOfAKindPoints;
+      player.roundPoints = revealedCardValuesSum;
     });
   }
 
@@ -481,13 +468,29 @@ export class Game {
     if (alreadyClosedPlayers.length > 0) return; // TODO: check if this is correct with more than 2 players
 
     const playerWithAllCardsRevealed = this.players.find((player) =>
-      player.knownCardPositions.every(
-        (knownCardPosition) => knownCardPosition === true
+      player.knownCardPositions.every((knownCardsColumn) =>
+        knownCardsColumn.every((knownCard) => knownCard === true)
       )
     );
     if (playerWithAllCardsRevealed) {
       playerWithAllCardsRevealed.closedRound = true;
     }
+  }
+
+  removeThreeOfAKinds() {
+    this.players.forEach((player) => {
+      const threeOfAKinds = player.getThreeOfAKinds();
+      if (threeOfAKinds.length == 0) return;
+      threeOfAKinds.forEach((threeOfAKind) => {
+        const { columnIndex, value } = threeOfAKind;
+        this.discardPile.push(value as Card);
+        this.discardPile.push(value as Card);
+        this.discardPile.push(value as Card);
+        player.deck.splice(columnIndex, 1);
+        player.knownCardPositions.splice(columnIndex, 1);
+      });
+      this.sendObfuscatedGameUpdate();
+    });
   }
 
   checkIfPointLimitReached() {
@@ -553,9 +556,11 @@ export class Game {
 
   revealAllCards() {
     this.players.forEach((player) => {
-      player.knownCardPositions = player.knownCardPositions.map(
-        (knownCardPosition) => true
-      );
+      player.knownCardPositions.forEach((column, columnIndex) => {
+        column.forEach((card, cardIndex) => {
+          player.knownCardPositions[columnIndex][cardIndex] = true;
+        });
+      });
     });
   }
 
@@ -648,16 +653,6 @@ export class Game {
     );
     if (player) return player;
     else throw new Error(`No player with socketId ${playerSocketId} found!`);
-  }
-
-  listPlayerSocketListeners() {
-    console.log("Player socket listeners:");
-    io.sockets.sockets.forEach((socket) => {
-      console.log(socket.id);
-      socket.eventNames().forEach((eventName) => {
-        console.log(`${eventName.toString()}`);
-      });
-    });
   }
 
   sendMessageToAllPlayers(message: string) {

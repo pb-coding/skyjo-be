@@ -4,8 +4,27 @@ import { Game } from "./game";
 
 import { allGames } from "./game";
 
-export const handleJoinSession = (socket: Socket, sessionId: string) => {
+type SessionResponse = "success" | "error:full" | "error:running";
+
+export const handleJoinSession = (
+  socket: Socket,
+  sessionId: string,
+  callback: Function
+) => {
+  const isSessionRunning = allGames.some(
+    (game) => game.sessionId === sessionId
+  );
+  if (isSessionRunning) {
+    callback("error:running" satisfies SessionResponse);
+    socket.emit(
+      "message",
+      "A Game is already running in this session. Please join another session."
+    );
+    return;
+  }
+
   socket.join(sessionId);
+  callback("success" satisfies SessionResponse);
   console.log("User joined session:", sessionId);
 
   const numberOfClients = io.sockets.adapter.rooms.get(sessionId)?.size ?? 0;
@@ -41,6 +60,7 @@ export const handleNewGame = (
 
   if (players && players.size > 1) {
     const game = new Game(socket, sessionId, players);
+    removeOldGame(sessionId);
     allGames.push(game);
     console.log(`New Game created with ${game.playerCount} players!`);
     game.gameLoop();
@@ -61,4 +81,13 @@ export const handleDisconnect = (socket: Socket) => {
   allSessions.forEach((socketIds, sessionName) => {
     io.to(sessionName).emit("clients-in-session", socketIds.size);
   });
+};
+
+const removeOldGame = (sessionId: string) => {
+  const oldGameIndex = allGames.findIndex(
+    (game) => game.sessionId === sessionId
+  );
+  if (oldGameIndex !== -1) {
+    allGames.splice(oldGameIndex, 1);
+  }
 };
