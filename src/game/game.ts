@@ -243,6 +243,11 @@ export class Game {
 
   revealCardAction(playerSocketId: string, cardPosition: CardPosition) {
     const player = this.getPlayerBySocketId(playerSocketId);
+    // ugly type checking - typescript is not able to check the type of the data sent by the client if its a type alias :(
+    if (!(cardPosition instanceof Array)) return;
+    if (cardPosition.length !== 2) return;
+    if (cardPosition.some((position) => typeof position !== "number")) return;
+
     const [columnIndex, cardIndex] = cardPosition;
     const revealedCard = player.deck[columnIndex][cardIndex];
     console.log(
