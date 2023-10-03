@@ -9,13 +9,13 @@ type SessionResponse = "success" | "error:full" | "error:running";
 export const handleJoinSession = (
   socket: Socket,
   sessionId: string,
-  callback: Function
+  callback: Function | undefined
 ) => {
   const isSessionRunning = allGames.some(
     (game) => game.sessionId === sessionId
   );
   if (isSessionRunning) {
-    callback("error:running" satisfies SessionResponse);
+    callback && callback("error:running" satisfies SessionResponse);
     socket.emit(
       "message",
       "A Game is already running in this session. Please join another session."
@@ -24,7 +24,7 @@ export const handleJoinSession = (
   }
 
   socket.join(sessionId);
-  callback("success" satisfies SessionResponse);
+  callback && callback("success" satisfies SessionResponse);
   console.log("User joined session:", sessionId);
 
   const numberOfClients = io.sockets.adapter.rooms.get(sessionId)?.size ?? 0;
