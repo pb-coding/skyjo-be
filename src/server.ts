@@ -47,6 +47,11 @@ io.on("connection", (socket: Socket) => {
     handleLeaveSession(socket, sessionId);
   });
 
+  socket.on("signal", (data: any) => {
+    const { to, signalData } = data;
+    io.to(to).emit("signal", { from: socket.id, signalData });
+  });
+
   socket.on("new-game", (gameDetails: { sessionId: string }) =>
     // TODO: get sessionId from socket instead of passing it from client
     handleNewGame(socket, gameDetails)

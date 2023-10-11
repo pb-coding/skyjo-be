@@ -27,9 +27,16 @@ export const handleJoinSession = (
   callback && callback("success" satisfies SessionResponse);
   console.log("User joined session:", sessionId);
 
-  const numberOfClients = io.sockets.adapter.rooms.get(sessionId)?.size ?? 0;
+  const clientsInRoom = io.sockets.adapter.rooms.get(sessionId) || new Set();
+  const numberOfClients = clientsInRoom.size ?? 0;
   console.log("Clients in room:", numberOfClients);
   io.to(sessionId).emit("clients-in-session", numberOfClients);
+
+  clientsInRoom.forEach((clientId) => {
+    if (clientId !== socket.id) {
+      io.to(clientId).emit("initiate-voice-chat", { to: socket.id });
+    }
+  });
 };
 
 export const handleLeaveSession = (socket: Socket, sessionId: string) => {
