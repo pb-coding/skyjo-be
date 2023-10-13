@@ -47,9 +47,49 @@ io.on("connection", (socket: Socket) => {
     handleLeaveSession(socket, sessionId);
   });
 
-  socket.on("signal", (data: any) => {
-    const { to, signalData } = data;
-    io.to(to).emit("signal", { from: socket.id, signalData });
+  socket.on("create-offer", (offerData) => {
+    const { offerDescription, sessionName } = offerData;
+
+    if (!sessionName || sessionName == "")
+      return console.log("No session name provided");
+
+    const clientsInRoom =
+      io.sockets.adapter.rooms.get(sessionName) || new Set();
+    clientsInRoom.forEach((clientId) => {
+      if (clientId !== socket.id) {
+        io.to(clientId).emit("offer-made", offerDescription);
+      }
+    });
+  });
+
+  socket.on("answer-call", (answerData) => {
+    const { answerDescription, sessionName } = answerData;
+
+    if (!sessionName || sessionName == "")
+      return console.log("No session name provided");
+
+    const clientsInRoom =
+      io.sockets.adapter.rooms.get(sessionName) || new Set();
+    clientsInRoom.forEach((clientId) => {
+      if (clientId !== socket.id) {
+        io.to(clientId).emit("answer-made", answerDescription);
+      }
+    });
+  });
+
+  socket.on("ice-candidate", (candidateData) => {
+    const { candidate, sessionName } = candidateData;
+
+    if (!sessionName || sessionName == "")
+      return console.log("No session name provided");
+
+    const clientsInRoom =
+      io.sockets.adapter.rooms.get(sessionName) || new Set();
+    clientsInRoom.forEach((clientId) => {
+      if (clientId !== socket.id) {
+        io.to(clientId).emit("add-ice-candidate", candidate);
+      }
+    });
   });
 
   socket.on("new-game", (gameDetails: { sessionId: string }) =>
