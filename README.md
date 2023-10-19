@@ -1,10 +1,11 @@
 # Skylo Backend
 
-Skylo is a digital card game, which has some similarities to the popular card game Skyjo ;)
+This is a tribute to the creator of my favorite game, Skyjo! Please purchase the original game to discover the true gaming experience: https://www.magilano.com/produkt/skyjo/
 
-Play latest release here: https://skyjo.voltvector.org/
+Play latest release here: https://skylo-game.com
 
 This is the backend using:
+
 - Typescript
 - Express.js
 - Socket.io
