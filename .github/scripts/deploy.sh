@@ -12,7 +12,7 @@ DOCKER_REGISTRY_TOKEN=$1
 
 # Authenticate with Docker registry
 echo "Authenticating with Docker registry..."
-docker login -u $DOCKER_USERNAME --password $GITHUB_TOKEN $DOCKER_REGISTRY
+docker login -u $DOCKER_USERNAME --password $DOCKER_REGISTRY_TOKEN $DOCKER_REGISTRY
 
 # Pull the latest Docker image
 echo "Pulling the latest Docker image..."
