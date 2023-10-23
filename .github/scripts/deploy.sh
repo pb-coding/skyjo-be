@@ -8,6 +8,7 @@ DOCKER_IMAGE_NAME="skyjo-be"
 CONTAINER_NAME="skyjo-be"
 TARGET_DIRECTORY="/home/pb1497/deployments/$CONTAINER_NAME"
 DOCKER_NETWORK="swag_net"
+DOCKER_REGISTRY_TOKEN=$1
 
 # Authenticate with Docker registry
 echo "Authenticating with Docker registry..."
@@ -17,6 +18,7 @@ docker login -u $DOCKER_USERNAME --password $GITHUB_TOKEN $DOCKER_REGISTRY
 echo "Pulling the latest Docker image..."
 docker pull $DOCKER_REGISTRY/$DOCKER_USERNAME/$DOCKER_IMAGE_NAME:latest
 
+mkdir -p $TARGET_DIRECTORY
 cd $TARGET_DIRECTORY
 
 # Stop and remove the existing container if it exists
